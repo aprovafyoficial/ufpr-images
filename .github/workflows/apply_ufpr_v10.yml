@@ -1,0 +1,28 @@
+name: Apply UFPR V10 images
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply_ufpr_v10.yml'
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Rebuild archive and replace images
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .staging_v10/chunk_* | base64 -d > /tmp/ufpr_v10.tar.gz
+          tar -xzf /tmp/ufpr_v10.tar.gz -C .
+          rm -rf .staging_v10
+          rm -f .github/workflows/apply_ufpr_v10.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply corrected UFPR V10 image crops"
+          git push
