@@ -1,8 +1,8 @@
-name: Publish UFPR image assets
+name: Publish UFPR high-resolution figure assets
 on:
   push:
     paths:
-      - 'ufpr-v11-payload.tar.gz'
+      - 'ufpr-v11-payload-*.tar.gz'
   workflow_dispatch:
 permissions:
   contents: write
@@ -13,26 +13,32 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: true
-      - name: Extract validated PNG paths and commit
+      - name: Verify and extract original figure files
         shell: bash
         run: |
           python3 - <<'PY'
           import tarfile, pathlib
-          f=pathlib.Path('ufpr-v11-payload.tar.gz')
-          if not f.is_file():
-              raise SystemExit("No payload archive")
-          with tarfile.open(f,'r:gz') as tar:
-              ms=tar.getmembers()
-              for m in ms:
-                  path=pathlib.PurePosixPath(m.name)
-                  if (not m.isfile()) or len(path.parts)!=3 or path.parts[0]!='ufpr' or not path.parts[1].isdigit() or path.suffix.lower() not in ('.png','.jpg','.jpeg','.webp'):
-                      raise SystemExit("Unsafe archive member: "+m.name)
-              tar.extractall(path='.',filter='data')
-          f.unlink()
+          packages=sorted(pathlib.Path('.').glob('ufpr-v11-payload-*.tar.gz'))
+          if not packages:
+              raise SystemExit('Missing UFPR asset payloads')
+          paths=set()
+          for f in packages:
+              with tarfile.open(f,'r:gz') as tar:
+                  members=tar.getmembers()
+                  for m in members:
+                      path=pathlib.PurePosixPath(m.name)
+                      if (not m.isfile()) or len(path.parts)!=3 or path.parts[0]!='ufpr' or not path.parts[1].isdigit() or path.suffix.lower() not in ('.png','.jpg','.jpeg','.webp'):
+                          raise SystemExit('Unsafe archive member: '+m.name)
+                      if m.name in paths:
+                          raise SystemExit('Duplicate image path: '+m.name)
+                      paths.add(m.name)
+                  tar.extractall(path='.',filter='data')
+              f.unlink()
+          print('Verified and extracted',len(paths),'unique images')
           PY
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          git add ufpr/ ufpr-v11-payload.tar.gz
+          git add -A
           git diff --cached --quiet && exit 0
-          git commit -m "Publish verified high-resolution UFPR diagrams"
+          git commit -m "Publish high-resolution image-only UFPR figures"
           git push
